@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <radialGradient id="bg"><stop stop-color="#351015"/><stop offset=".68" stop-color="#170d0f"/><stop offset="1" stop-color="#0b090a"/></radialGradient>
+    <radialGradient id="glow"><stop stop-color="#e52635" stop-opacity=".3"/><stop offset="1" stop-color="#e52635" stop-opacity="0"/></radialGradient>
+    <filter id="blur"><feGaussianBlur stdDeviation="22"/></filter>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <ellipse cx="600" cy="280" rx="470" ry="260" fill="url(#glow)" filter="url(#blur)"/>
+  <g fill="none" stroke="#f02d3b" transform="translate(600 275) rotate(-13)">
+    <ellipse rx="72" ry="39" stroke-width="2.2" opacity=".9"/>
+    <ellipse rx="112" ry="61" stroke-width="2" opacity=".78"/>
+    <ellipse rx="152" ry="83" stroke-width="1.8" opacity=".66"/>
+    <ellipse rx="192" ry="105" stroke-width="1.6" opacity=".55"/>
+    <ellipse rx="232" ry="127" stroke-width="1.4" opacity=".43"/>
+    <ellipse rx="272" ry="149" stroke-width="1.2" opacity=".31"/>
+    <ellipse rx="312" ry="171" stroke-width="1" opacity=".22"/>
+  </g>
+  <text x="600" y="298" fill="#fff7f5" font-family="Arial,sans-serif" font-size="83" font-weight="700" letter-spacing="-7" text-anchor="middle">Silent</text>
+  <text x="600" y="379" fill="#f0525c" font-family="Georgia,serif" font-size="74" font-style="italic" text-anchor="middle">Client</text>
+  <text x="600" y="540" fill="#bba5a3" font-family="monospace" font-size="13" letter-spacing="4" text-anchor="middle">A DIFFERENT ATMOSPHERE · DD RACENETWORK</text>
+</svg>
