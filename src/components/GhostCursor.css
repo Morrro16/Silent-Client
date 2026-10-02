@@ -9,4 +9,18 @@
   width: 100%;
   height: 100%;
   background: transparent;
+  image-rendering: auto;
+}
+
+.ghost-cursor-fallback {
+  position: absolute;
+  width: min(52vmin, 420px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  filter: blur(22px);
+  mix-blend-mode: screen;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  transition: opacity var(--ghost-cursor-fade-duration, 1500ms) ease;
 }

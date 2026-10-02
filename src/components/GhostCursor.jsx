@@ -10,6 +10,7 @@ const GhostCursor = ({
   className,
   style,
   trailLength = 50,
+  size = 420,
   inertia = 0.5,
   grainIntensity = 0.05,
   bloomStrength = 0.1,
@@ -21,7 +22,7 @@ const GhostCursor = ({
   mixBlendMode = 'screen',
   edgeIntensity = 0,
 
-  maxDevicePixelRatio = 0.5,
+  maxDevicePixelRatio = 1,
   targetPixels,
 
   fadeDelayMs,
@@ -53,7 +54,7 @@ const GhostCursor = ({
     []
   );
 
-  const pixelBudget = targetPixels ?? (isTouch ? 0.9e6 : 1.3e6);
+  const pixelBudget = targetPixels ?? (isTouch ? 0.9e6 : 2e6);
   const fadeDelay = fadeDelayMs ?? (isTouch ? 500 : 1000);
   const fadeDuration = fadeDurationMs ?? (isTouch ? 1000 : 1500);
 
@@ -72,6 +73,7 @@ const GhostCursor = ({
     uniform vec2  iPrevMouse[MAX_TRAIL_LENGTH];
     uniform float iOpacity;
     uniform float iScale;
+    uniform float iRadius;
     uniform vec3  iBaseColor;
     uniform float iBrightness;
     uniform float iEdgeIntensity;
@@ -103,7 +105,7 @@ const GhostCursor = ({
       vec2 r = vec2(fbm(p * iScale + q * 1.5 + iTime * 0.15), fbm(p * iScale + q * 1.5 + vec2(8.3,2.8) + iTime * 0.15));
 
       float smoke = fbm(p * iScale + r * 0.8);
-      float radius = (0.5 + 0.4 * (1.0 / iScale)) * 0.6;
+      float radius = iRadius;
       float distFactor = 1.0 - smoothstep(0.0, radius * activity, length(p - mousePos));
       float alpha = pow(smoke, 2.5) * distFactor;
 
@@ -121,22 +123,22 @@ const GhostCursor = ({
       vec3 colorAcc = vec3(0.0);
       float alphaAcc = 0.0;
 
-      vec4 b = blob(uv, mouse, 1.0, iOpacity);
-      colorAcc += b.rgb;
-      alphaAcc += b.a;
+      vec4 b = blob(uv, mouse, 1.0, 1.0);
+      float baseWeight = 1.0 - alphaAcc;
+      colorAcc += b.rgb * baseWeight;
+      alphaAcc += b.a * baseWeight;
 
       for (int i = 0; i < MAX_TRAIL_LENGTH; i++) {
         vec2 pm = (iPrevMouse[i] * 2.0 - 1.0) * vec2(iResolution.x / iResolution.y, 1.0);
         float t = 1.0 - float(i) / float(MAX_TRAIL_LENGTH);
         t = pow(t, 2.0);
         if (t > 0.01) {
-          vec4 bt = blob(uv, pm, t * 0.8, iOpacity);
-          colorAcc += bt.rgb;
-          alphaAcc += bt.a;
+          vec4 bt = blob(uv, pm, t * 0.8, 1.0);
+          float trailWeight = 1.0 - alphaAcc;
+          colorAcc += bt.rgb * trailWeight;
+          alphaAcc += bt.a * trailWeight;
         }
       }
-
-      colorAcc *= iBrightness;
 
       vec2 uv01 = gl_FragCoord.xy / iResolution.xy;
       float edgeDist = min(min(uv01.x, 1.0 - uv01.x), min(uv01.y, 1.0 - uv01.y));
@@ -144,6 +146,7 @@ const GhostCursor = ({
       float k = clamp(iEdgeIntensity, 0.0, 1.0);
       float edgeMask = mix(1.0 - k, 1.0, distFromEdge);
 
+      colorAcc *= iBrightness * iOpacity * edgeMask;
       float outAlpha = clamp(alphaAcc * iOpacity * edgeMask, 0.0, 1.0);
       gl_FragColor = vec4(colorAcc, outAlpha);
     }
@@ -197,9 +200,9 @@ const GhostCursor = ({
           varying vec2 vUv;
           void main(){
             vec4 c = texture2D(tDiffuse, vUv);
-            float coverage = clamp(max(c.r, max(c.g, c.b)), 0.0, 1.0);
-            vec3 straight = coverage > 1e-5 ? c.rgb / coverage : vec3(0.0);
-            gl_FragColor = vec4(clamp(straight, 0.0, 1.0), coverage);
+            float alpha = clamp(c.a, 0.0, 1.0);
+            vec3 straight = alpha > 1e-5 ? c.rgb / alpha : vec3(0.0);
+            gl_FragColor = vec4(clamp(straight, 0.0, 1.0), alpha);
           }
         `
       }),
@@ -225,15 +228,49 @@ const GhostCursor = ({
       parent.style.position = 'relative';
     }
 
-    const renderer = new THREE.WebGLRenderer({
-      antialias: !isTouch,
-      alpha: true,
-      depth: false,
-      stencil: false,
-      powerPreference: isTouch ? 'low-power' : 'high-performance',
-      premultipliedAlpha: false,
-      preserveDrawingBuffer: false
-    });
+    let renderer;
+    try {
+      renderer = new THREE.WebGLRenderer({
+        antialias: !isTouch,
+        alpha: true,
+        depth: false,
+        stencil: false,
+        powerPreference: isTouch ? 'low-power' : 'high-performance',
+        premultipliedAlpha: false,
+        preserveDrawingBuffer: false
+      });
+    } catch {
+      const fallback = document.createElement('div');
+      fallback.className = 'ghost-cursor-fallback';
+      fallback.style.backgroundImage = `radial-gradient(circle, ${color}75 0%, ${color}35 32%, ${color}12 58%, transparent 76%)`;
+      fallback.style.setProperty('--ghost-cursor-fade-duration', `${fadeDuration}ms`);
+      host.appendChild(fallback);
+
+      let fadeTimer;
+      const onFallbackMove = e => {
+        const rect = parent.getBoundingClientRect();
+        fallback.style.left = `${e.clientX - rect.left}px`;
+        fallback.style.top = `${e.clientY - rect.top}px`;
+        fallback.style.opacity = '1';
+        window.clearTimeout(fadeTimer);
+        fadeTimer = window.setTimeout(() => { fallback.style.opacity = '0'; }, fadeDelay + fadeDuration);
+      };
+      const onFallbackLeave = () => {
+        window.clearTimeout(fadeTimer);
+        fadeTimer = window.setTimeout(() => { fallback.style.opacity = '0'; }, fadeDelay);
+      };
+
+      parent.addEventListener('pointermove', onFallbackMove, { passive: true });
+      parent.addEventListener('pointerleave', onFallbackLeave, { passive: true });
+
+      return () => {
+        parent.removeEventListener('pointermove', onFallbackMove);
+        parent.removeEventListener('pointerleave', onFallbackLeave);
+        window.clearTimeout(fadeTimer);
+        fallback.remove();
+        if (!prevParentPos || prevParentPos === 'static') parent.style.position = prevParentPos;
+      };
+    }
     renderer.setClearColor(0x000000, 0);
     rendererRef.current = renderer;
 
@@ -252,7 +289,7 @@ const GhostCursor = ({
     const geom = new THREE.PlaneGeometry(2, 2);
 
     const maxTrail = Math.max(1, Math.floor(trailLength));
-    trailBufRef.current = Array.from({ length: maxTrail }, () => new THREE.Vector2(0.5, 0.5));
+    trailBufRef.current = Array.from({ length: maxTrail }, () => new THREE.Vector2(2, 2));
     headRef.current = 0;
 
     const baseColor = new THREE.Color(color);
@@ -266,6 +303,7 @@ const GhostCursor = ({
         iPrevMouse: { value: trailBufRef.current.map(v => v.clone()) },
         iOpacity: { value: 1.0 },
         iScale: { value: 1.0 },
+        iRadius: { value: 0.35 },
         iBaseColor: { value: new THREE.Vector3(baseColor.r, baseColor.g, baseColor.b) },
         iBrightness: { value: brightness },
         iEdgeIntensity: { value: edgeIntensity }
@@ -273,6 +311,7 @@ const GhostCursor = ({
       vertexShader: baseVertexShader,
       fragmentShader,
       transparent: true,
+      premultipliedAlpha: true,
       depthTest: false,
       depthWrite: false
     });
@@ -281,15 +320,28 @@ const GhostCursor = ({
     const mesh = new THREE.Mesh(geom, material);
     scene.add(mesh);
 
-    const composer = new EffectComposer(renderer);
+    const supportsFloatColorBuffer = Boolean(renderer.getContext().getExtension('EXT_color_buffer_float'));
+    const composerTarget = new THREE.WebGLRenderTarget(1, 1, {
+      format: THREE.RGBAFormat,
+      type: supportsFloatColorBuffer ? THREE.HalfFloatType : THREE.UnsignedByteType,
+      minFilter: THREE.LinearFilter,
+      magFilter: THREE.LinearFilter,
+      depthBuffer: false,
+      stencilBuffer: false
+    });
+    const composer = new EffectComposer(renderer, composerTarget);
     composerRef.current = composer;
 
     const renderPass = new RenderPass(scene, camera);
     composer.addPass(renderPass);
 
-    const bloomPass = new UnrealBloomPass(new THREE.Vector2(1, 1), bloomStrength, bloomRadius, bloomThreshold);
-    bloomPassRef.current = bloomPass;
-    composer.addPass(bloomPass);
+    let bloomPass = null;
+    bloomPassRef.current = null;
+    if (supportsFloatColorBuffer) {
+      bloomPass = new UnrealBloomPass(new THREE.Vector2(1, 1), bloomStrength, bloomRadius, bloomThreshold);
+      bloomPassRef.current = bloomPass;
+      composer.addPass(bloomPass);
+    }
 
     const filmPass = new ShaderPass(FilmGrainShader);
     filmPassRef.current = filmPass;
@@ -327,21 +379,29 @@ const GhostCursor = ({
       const hpx = Math.max(1, Math.floor(cssH * pixelRatio));
       material.uniforms.iResolution.value.set(wpx, hpx, 1);
       material.uniforms.iScale.value = calculateScale(host);
-      bloomPass.setSize(wpx, hpx);
+      material.uniforms.iRadius.value = THREE.MathUtils.clamp(size / cssH, 0.08, 0.8);
+      bloomPass?.setSize(wpx, hpx);
 
       hasValidSizeRef.current = true;
     };
 
     resize();
-    const ro = new ResizeObserver(() => {
-      if (!active) return;
-      resize();
-    });
-    resizeObsRef.current = ro;
-    ro.observe(parent);
-    ro.observe(host);
+    let usesWindowResizeFallback = false;
+    if (typeof ResizeObserver !== 'undefined') {
+      const ro = new ResizeObserver(() => {
+        if (!active) return;
+        resize();
+      });
+      resizeObsRef.current = ro;
+      ro.observe(parent);
+      ro.observe(host);
+    } else {
+      usesWindowResizeFallback = true;
+      window.addEventListener('resize', resize, { passive: true });
+    }
 
     const start = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    let previousFrameTime = start;
     const animate = () => {
       if (!active) return;
 
@@ -352,21 +412,23 @@ const GhostCursor = ({
 
       const now = performance.now();
       const t = (now - start) / 1000;
+      const frameScale = Math.max(0.25, Math.min(3, (now - previousFrameTime) / (1000 / 60)));
+      previousFrameTime = now;
 
       const mat = materialRef.current;
       const comp = composerRef.current;
 
       if (pointerActiveRef.current) {
         velocityRef.current.set(
-          currentMouseRef.current.x - mat.uniforms.iMouse.value.x,
-          currentMouseRef.current.y - mat.uniforms.iMouse.value.y
+          (currentMouseRef.current.x - mat.uniforms.iMouse.value.x) / frameScale,
+          (currentMouseRef.current.y - mat.uniforms.iMouse.value.y) / frameScale
         );
         mat.uniforms.iMouse.value.copy(currentMouseRef.current);
         fadeOpacityRef.current = 1.0;
       } else {
-        velocityRef.current.multiplyScalar(inertia);
+        velocityRef.current.multiplyScalar(Math.pow(inertia, frameScale));
         if (velocityRef.current.lengthSq() > 1e-6) {
-          mat.uniforms.iMouse.value.add(velocityRef.current);
+          mat.uniforms.iMouse.value.addScaledVector(velocityRef.current, frameScale);
         }
         const dt = now - lastMoveTimeRef.current;
         if (dt > fadeDelay) {
@@ -376,8 +438,6 @@ const GhostCursor = ({
       }
 
       const N = trailBufRef.current.length;
-      headRef.current = (headRef.current + 1) % N;
-      trailBufRef.current[headRef.current].copy(mat.uniforms.iMouse.value);
       const arr = mat.uniforms.iPrevMouse.value;
       for (let i = 0; i < N; i++) {
         const srcIdx = (headRef.current - i + N) % N;
@@ -414,6 +474,16 @@ const GhostCursor = ({
       const x = THREE.MathUtils.clamp((e.clientX - rect.left) / Math.max(1, rect.width), 0, 1);
       const y = THREE.MathUtils.clamp(1 - (e.clientY - rect.top) / Math.max(1, rect.height), 0, 1);
       currentMouseRef.current.set(x, y);
+      const trailPoints = trailBufRef.current;
+      if (trailPoints.length > 0) {
+        const latestTrailPoint = trailPoints[headRef.current];
+        const deltaX = x - latestTrailPoint.x;
+        const deltaY = y - latestTrailPoint.y;
+        if (deltaX * deltaX + deltaY * deltaY > 0.000004) {
+          headRef.current = (headRef.current + 1) % trailPoints.length;
+          trailPoints[headRef.current].set(x, y);
+        }
+      }
       pointerActiveRef.current = true;
       lastMoveTimeRef.current = performance.now();
       ensureLoop();
@@ -446,6 +516,8 @@ const GhostCursor = ({
       parent.removeEventListener('pointerenter', onPointerEnter);
       parent.removeEventListener('pointerleave', onPointerLeave);
       resizeObsRef.current?.disconnect();
+      resizeObsRef.current = null;
+      if (usesWindowResizeFallback) window.removeEventListener('resize', resize);
 
       scene.clear();
       geom.dispose();
@@ -467,6 +539,7 @@ const GhostCursor = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     trailLength,
+    size,
     inertia,
     grainIntensity,
     bloomStrength,

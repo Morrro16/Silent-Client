@@ -3,6 +3,7 @@ import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 const MagicRings = lazy(() => import('./components/MagicRings.jsx'))
 const MorphSlider = lazy(() => import('./components/MorphSlider.jsx'))
 const GhostCursor = lazy(() => import('./components/GhostCursor.jsx'))
+const GradientBarsBackground = lazy(() => import('./components/ui/gradient-bars-background.jsx'))
 
 const logoUrl = `${import.meta.env.BASE_URL}brand-logo.png`
 const linuxLogoUrl = `${import.meta.env.BASE_URL}linux.svg`
@@ -111,7 +112,8 @@ const translations = {
     slide: 'Функция',
     showcaseLabel: 'Обзор функций Silent Client',
     switchLanguage: 'Switch language to English',
-    showcaseTitle: <>Работает <em>идеально</em></>,
+    showcaseTitle: 'Лучший визуал',
+    showcaseSubtitle: 'Всё в ваших руках',
     downloadTitle: 'Скачать Silent Client',
     downloadDescription: 'Выберите версию клиента для вашей системы.',
     windowsSupport: 'Windows 11 и более ранние версии',
@@ -143,7 +145,8 @@ const translations = {
     slide: 'Feature',
     showcaseLabel: 'Silent Client feature overview',
     switchLanguage: 'Переключить язык на русский',
-    showcaseTitle: <>Works <em>perfectly</em></>,
+    showcaseTitle: 'Visuals at their best',
+    showcaseSubtitle: 'Everything is in your hands',
     downloadTitle: 'Download Silent Client',
     downloadDescription: 'Choose the client version for your system.',
     windowsSupport: 'Windows 11 and earlier',
@@ -266,9 +269,19 @@ function Header({ language, setLanguage, text, isDownloadPage, isDocumentationPa
   )
 }
 
-function DownloadPage({ text }) {
+function DownloadPage({ text, simplifiedExperience }) {
   return (
     <section className="download-page" aria-labelledby="download-title">
+      {!simplifiedExperience && (
+        <Suspense fallback={null}>
+          <GradientBarsBackground
+            numBars={15}
+            gradientFrom="rgb(255, 0, 0)"
+            gradientTo="transparent"
+            animationDuration={2.4}
+          />
+        </Suspense>
+      )}
       <div className="download-content">
         <h1 id="download-title" className="download-title">{text.downloadTitle}</h1>
         <p className="download-description">{text.downloadDescription}</p>
@@ -663,7 +676,7 @@ function DocumentationPage({ language, text, simplifiedExperience }) {
     <section className="docs-page" aria-labelledby="docs-title">
       {!simplifiedExperience && (
         <Suspense fallback={null}>
-          <GhostCursor color="#ef3340" trailLength={24} inertia={0.58} brightness={0.68} bloomStrength={0.06} zIndex={0} />
+          <GhostCursor color="#ef3340" size={420} trailLength={18} inertia={0.58} brightness={0.68} targetPixels={2000000} bloomStrength={0.06} zIndex={0} />
         </Suspense>
       )}
       <div className="docs-container">
@@ -858,7 +871,7 @@ function App() {
     <>
       <Header language={language} setLanguage={setLanguage} text={text} isDownloadPage={isDownloadPage} isDocumentationPage={isDocumentationPage} />
       <main>
-        {isDownloadPage ? <DownloadPage text={text} /> : isDocumentationPage ? <DocumentationPage language={language} text={text} simplifiedExperience={simplifiedExperience} /> : (
+        {isDownloadPage ? <DownloadPage text={text} simplifiedExperience={simplifiedExperience} /> : isDocumentationPage ? <DocumentationPage language={language} text={text} simplifiedExperience={simplifiedExperience} /> : (
           <>
         <section className="hero" id="home" aria-labelledby="hero-title">
           <div className="hero-background" aria-hidden="true" />
@@ -899,6 +912,7 @@ function App() {
         <section id="showcase" className="showcase" aria-labelledby="showcase-title">
           <div className="showcase-content">
             <h2 id="showcase-title" className="showcase-title">{text.showcaseTitle}</h2>
+            <p className="showcase-subtitle">{text.showcaseSubtitle}</p>
             {simplifiedExperience
               ? <SimpleShowcase items={showcaseItems[language]} text={text} />
               : (
@@ -926,7 +940,7 @@ function App() {
           </>
         )}
       </main>
-      <footer className="footer">
+      <footer className={`footer${isDownloadPage ? ' footer-after-download' : ''}`}>
         <div className="footer-brand">
           <a className="footer-wordmark" href={homePageUrl} aria-label={text.homeLabel}>
             <img className="footer-logo" src={logoUrl} alt="" />
