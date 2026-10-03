@@ -200,6 +200,9 @@ const seoCopy = {
 function Header({ language, setLanguage, text, isDownloadPage, isDocumentationPage }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const [hasScrolled, setHasScrolled] = useState(() => window.scrollY > 72)
+  const [activeHomeSection, setActiveHomeSection] = useState(() => (
+    window.location.hash === '#showcase' ? 'overview' : 'home'
+  ))
 
   useEffect(() => {
     const updateVisibility = () => setHasScrolled(window.scrollY > 72)
@@ -208,15 +211,42 @@ function Header({ language, setLanguage, text, isDownloadPage, isDocumentationPa
     return () => window.removeEventListener('scroll', updateVisibility)
   }, [])
 
+  useEffect(() => {
+    if (isDownloadPage || isDocumentationPage) return undefined
+
+    let frame = 0
+    const updateActiveSection = () => {
+      window.cancelAnimationFrame(frame)
+      frame = window.requestAnimationFrame(() => {
+        const showcase = document.getElementById('showcase')
+        if (!showcase) return
+
+        setActiveHomeSection(
+          showcase.getBoundingClientRect().top <= window.innerHeight * 0.45 ? 'overview' : 'home',
+        )
+      })
+    }
+
+    updateActiveSection()
+    window.addEventListener('scroll', updateActiveSection, { passive: true })
+    window.addEventListener('hashchange', updateActiveSection)
+
+    return () => {
+      window.cancelAnimationFrame(frame)
+      window.removeEventListener('scroll', updateActiveSection)
+      window.removeEventListener('hashchange', updateActiveSection)
+    }
+  }, [isDownloadPage, isDocumentationPage])
+
   const isSubpage = isDownloadPage || isDocumentationPage
   const homePageUrl = localizedPageUrl(language)
   const homeHref = isSubpage ? homePageUrl : '#home'
   const showcaseHref = isSubpage ? `${homePageUrl}#showcase` : '#showcase'
   const navigation = [
-    { label: text.home, href: homeHref, current: !isSubpage },
-    { label: text.download, href: localizedPageUrl(language, 'download'), current: isDownloadPage },
-    { label: text.overview, href: showcaseHref, current: false },
-    { label: text.documentation, href: localizedPageUrl(language, 'documentation'), current: isDocumentationPage },
+    { label: text.home, href: homeHref, current: !isSubpage && activeHomeSection === 'home', currentType: 'page' },
+    { label: text.download, href: localizedPageUrl(language, 'download'), current: isDownloadPage, currentType: 'page' },
+    { label: text.overview, href: showcaseHref, current: !isSubpage && activeHomeSection === 'overview', currentType: 'location' },
+    { label: text.documentation, href: localizedPageUrl(language, 'documentation'), current: isDocumentationPage, currentType: 'page' },
   ]
 
   return (
@@ -226,13 +256,13 @@ function Header({ language, setLanguage, text, isDownloadPage, isDocumentationPa
       </a>
 
       <nav id="site-navigation" className={`site-nav${menuOpen ? ' is-open' : ''}`} aria-label={text.navLabel}>
-        {navigation.map(({ label, href, current }) => (
+        {navigation.map(({ label, href, current, currentType }) => (
           <a
             key={label}
             className={current ? 'is-active' : ''}
             href={href}
             onClick={() => setMenuOpen(false)}
-            aria-current={current ? 'page' : undefined}
+            aria-current={current ? currentType : undefined}
           >
             {label}
           </a>
